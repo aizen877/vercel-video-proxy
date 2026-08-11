@@ -414,14 +414,14 @@ module.exports = async (req, res) => {
                 } catch (e) {}
             }
 
-            // Map streams with direct URL and Instant Vercel Proxy Player URL
+            // Map streams with direct URL and Fresh Dynamic Vercel Proxy Player URL
             const formattedStreams = rawStreams.map(s => ({
                 id: s.id,
                 resolution: s.resolutions ? `${s.resolutions}p` : 'HD',
                 format: s.format || 'MP4',
                 size_bytes: s.size || null,
                 direct_url: s.url,
-                proxy_url: `${baseUrl}/?api=stream_play&target=${encodeURIComponent(s.url)}&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
+                proxy_url: `${baseUrl}/?api=stream_play&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
             }));
 
             // Format Stars / Cast
