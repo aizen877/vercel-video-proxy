@@ -136,11 +136,16 @@ module.exports = async (req, res) => {
                 return res.redirect(302, decodedTarget);
             }
 
-            // 3. Pipe Mode for Range requests
+            // 3. Pipe Mode for Range requests (Fixes 426 Upgrade Required via OSS CDN auth)
             const videoHeaders = {
                 'User-Agent': ua,
                 'Referer': 'https://filmboom.top/',
-                'Origin': 'https://filmboom.top'
+                'Origin': 'https://filmboom.top',
+                'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Sec-Fetch-Dest': 'video',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'cross-site'
             };
 
             if (req.headers.range) {
