@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     const baseUrl = `${protocol}://${host}`;
 
     const api = req.query.api || req.query.action || 'docs';
-    const ua = getRandomUserAgent();
+    const ua = USER_AGENT;
 
     try {
         // =============================================================
