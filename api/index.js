@@ -1,21 +1,11 @@
 const axios = require('axios');
 
-const USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36'
-];
-
-function getRandomUserAgent() {
-    return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 const SE_ASIAN_IPS = [
     '103.230.104.5',
     '180.252.120.10',
-    '110.137.45.12',
-    '114.122.35.88',
-    '125.160.18.45'
+    '110.137.45.12'
 ];
 
 function getRandomSEAsianIP() {
@@ -414,14 +404,14 @@ module.exports = async (req, res) => {
                 } catch (e) {}
             }
 
-            // Map streams with direct URL and Fresh Dynamic Vercel Proxy Player URL
+            // Map streams with direct URL and Instant Proxy Player URL
             const formattedStreams = rawStreams.map(s => ({
                 id: s.id,
                 resolution: s.resolutions ? `${s.resolutions}p` : 'HD',
                 format: s.format || 'MP4',
                 size_bytes: s.size || null,
                 direct_url: s.url,
-                proxy_url: `${baseUrl}/?api=stream_play&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
+                proxy_url: `${baseUrl}/?api=stream_play&target=${encodeURIComponent(s.url)}&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
             }));
 
             // Format Stars / Cast
