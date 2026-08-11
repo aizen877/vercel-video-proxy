@@ -97,17 +97,55 @@ module.exports = async (req, res) => {
             let decodedTarget = targetUrl;
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
+            // 1. Render HTML5 Web Player for browser navigation (Prevents Nginx 429 Direct Address Bar Block)
+            const acceptHeader = req.headers['accept'] || '';
+            if (acceptHeader.includes('text/html') && req.query.mode !== 'direct') {
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                const encodedStream = encodeURIComponent(decodedTarget);
+                return res.send(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>MovieBox Web Player</title>
+                    <style>
+                        body { background: #0b0f19; color: #fff; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; }
+                        .player-card { width: 90%; max-width: 900px; background: #1e293b; padding: 15px; border-radius: 12px; box-shadow: 0 0 30px rgba(56,189,248,0.3); text-align: center; }
+                        video { width: 100%; border-radius: 8px; outline: none; background: #000; }
+                        .info { margin-top: 12px; color: #38bdf8; font-size: 14px; }
+                        .back { display: inline-block; margin-top: 15px; color: #94a3b8; text-decoration: none; font-size: 14px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="player-card">
+                        <video controls autoplay name="media">
+                            <source src="/?api=stream_play&mode=pipe&target=${encodedStream}" type="video/mp4">
+                            Your browser does not support HTML5 video playback.
+                        </video>
+                        <div class="info">⚡ Playing via High-Speed Vercel Media Pipe</div>
+                        <a href="/?api=all&id=${sid || ''}" class="back">← Back to API Metadata</a>
+                    </div>
+                </body>
+                </html>
+                `);
+            }
 
-            if (req.query.mode !== 'pipe') {
+            // 2. Direct 302 Redirect for non-HTML players or mode=direct
+            if (req.query.mode === 'direct') {
                 return res.redirect(302, decodedTarget);
             }
 
+            // 3. Pipe Mode for Range requests
             const videoHeaders = {
                 'User-Agent': ua,
-                'Referer': `${SECOND_API_URL}/`,
-                'Origin': SECOND_API_URL
+                'Referer': 'https://filmboom.top/',
+                'Origin': 'https://filmboom.top'
             };
-            if (req.headers.range) videoHeaders['Range'] = req.headers.range;
+
+            if (req.headers.range) {
+                videoHeaders['Range'] = req.headers.range;
+            }
 
             const response = await axios({
                 method: 'get',
@@ -121,8 +159,13 @@ module.exports = async (req, res) => {
             res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
             res.setHeader('Content-Disposition', 'inline');
             res.setHeader('Accept-Ranges', 'bytes');
-            if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
-            if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
+
+            if (response.headers['content-range']) {
+                res.setHeader('Content-Range', response.headers['content-range']);
+            }
+            if (response.headers['content-length']) {
+                res.setHeader('Content-Length', response.headers['content-length']);
+            }
 
             res.status(response.status);
             return response.data.pipe(res);
