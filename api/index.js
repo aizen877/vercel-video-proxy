@@ -211,8 +211,8 @@ module.exports = async (req, res) => {
             <body>
                 <div class="container">
                     <div class="player-wrapper">
-                        <video id="mainPlayer" controls autoplay crossorigin="anonymous" poster="${poster}">
-                            ${defaultStreamUrl ? `<source src="${defaultStreamUrl}" type="video/mp4">` : ''}
+                        <video id="mainPlayer" controls autoplay poster="${poster}">
+                            <source src="${baseUrl}/?api=proxy&id=${sid}" type="video/mp4">
                             ${subtitles.map(s => `<track kind="subtitles" src="${s.url}" srclang="${s.lan || 'en'}" label="${s.lanName || s.lan}" ${s.lan === 'en' ? 'default' : ''}>`).join('')}
                             Your browser does not support HTML5 video playback.
                         </video>
