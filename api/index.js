@@ -185,7 +185,11 @@ module.exports = async (req, res) => {
                 'User-Agent': ua,
                 'Referer': `https://filmboom.top/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
                 'Origin': 'https://filmboom.top',
-                'Accept': 'application/json, text/plain, */*'
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin'
             };
 
             // 2. Fetch Streams via Multi-Endpoint Retries
