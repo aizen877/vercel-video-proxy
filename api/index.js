@@ -248,8 +248,6 @@ module.exports = async (req, res) => {
                 }
             }
 
-            const clientIp = `${Math.floor(Math.random() * 150) + 20}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
-
             const basePlayHeaders = {
                 'User-Agent': ua,
                 'Accept': 'application/json, text/plain, */*',
@@ -257,8 +255,6 @@ module.exports = async (req, res) => {
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
                 'Sec-Fetch-Site': 'same-origin',
-                'X-Forwarded-For': clientIp,
-                'X-Real-IP': clientIp,
                 'Cookie': 'lang=en'
             };
 
