@@ -1,6 +1,5 @@
 const axios = require('axios');
 
-// User-Agent Pool
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -9,6 +8,18 @@ const USER_AGENTS = [
 
 function getRandomUserAgent() {
     return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+const SE_ASIAN_IPS = [
+    '103.230.104.5',
+    '180.252.120.10',
+    '110.137.45.12',
+    '114.122.35.88',
+    '125.160.18.45'
+];
+
+function getRandomSEAsianIP() {
+    return SE_ASIAN_IPS[Math.floor(Math.random() * SE_ASIAN_IPS.length)];
 }
 
 const MAIN_URL = "https://moviebox.ph";
@@ -45,15 +56,19 @@ module.exports = async (req, res) => {
             let targetUrl = req.query.target || req.query.url;
 
             if (!targetUrl && sid) {
+                const clientIp = getRandomSEAsianIP();
                 const playHeaders = {
                     'User-Agent': ua,
                     'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
                     'Origin': SECOND_API_URL,
                     'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin'
+                    'Sec-Fetch-Site': 'same-origin',
+                    'X-Forwarded-For': clientIp,
+                    'X-Real-IP': clientIp,
+                    'Cookie': 'lang=en'
                 };
 
                 const endpoints = [
@@ -299,15 +314,20 @@ module.exports = async (req, res) => {
                 }
             }
 
+            const clientIp = getRandomSEAsianIP();
+
             const playHeaders = {
                 'User-Agent': ua,
                 'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
                 'Origin': SECOND_API_URL,
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin'
+                'Sec-Fetch-Site': 'same-origin',
+                'X-Forwarded-For': clientIp,
+                'X-Real-IP': clientIp,
+                'Cookie': 'lang=en'
             };
 
             // 3. Fetch Video Streams
