@@ -46,11 +46,16 @@ module.exports = async (req, res) => {
         if (videoUrl.includes('%')) videoUrl = decodeURIComponent(videoUrl);
         if (videoUrl.includes('%')) videoUrl = decodeURIComponent(videoUrl);
 
-        // 3. Build Spoofed Headers
+        // 3. Build Spoofed Headers (Full Chrome Video Player Footprint)
         const headers = {
             'User-Agent': getRandomUserAgent(),
             'Referer': referer,
-            'Origin': origin
+            'Origin': origin,
+            'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Sec-Fetch-Dest': 'video',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'cross-site'
         };
 
         if (req.headers.range) {
