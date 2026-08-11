@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     try {
         // =============================================================
         // INSTANT STREAM PLAYER PROXY (?api=stream_play&id=...&se=...&ep=...)
-        // Generates fresh signature & pipes MP4 stream directly in 1 step!
+        // Resolves fresh signed URL & redirects/pipes instantly!
         // =============================================================
         if (api === 'stream_play' || api === 'stream_pipe') {
             const sid = req.query.id;
@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
             const detailPath = req.query.detail || '';
             let targetUrl = req.query.target || req.query.url;
 
-            // If target URL is not directly passed, generate fresh signed URL using Vercel
+            // Resolve fresh signed MP4 URL using Vercel if target is not passed
             if (!targetUrl && sid) {
                 const playHeaders = {
                     'User-Agent': ua,
@@ -56,14 +56,14 @@ module.exports = async (req, res) => {
 
                 const endpoints = [
                     `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                    `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
                     `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`,
-                    `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=1&ep=1`,
-                    `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`
+                    `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
                 ];
 
                 for (const epUrl of endpoints) {
                     try {
-                        const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
+                        const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 6000 });
                         const st = pRes.data?.data?.streams || [];
                         if (st.length > 0) {
                             targetUrl = st[0].url;
@@ -82,6 +82,12 @@ module.exports = async (req, res) => {
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
 
+            // Fast 302 Redirect (Prevents Vercel 10s Serverless Timeout)
+            if (req.query.mode !== 'pipe') {
+                return res.redirect(302, decodedTarget);
+            }
+
+            // Pipe Mode for Range requests
             const videoHeaders = {
                 'User-Agent': ua,
                 'Referer': 'https://filmboom.top/',
@@ -98,7 +104,7 @@ module.exports = async (req, res) => {
                 headers: videoHeaders,
                 responseType: 'stream',
                 validateStatus: () => true,
-                timeout: 25000
+                timeout: 9000
             });
 
             res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
