@@ -121,12 +121,23 @@ module.exports = async (req, res) => {
         // ACTION 4: Play Page Generator (Vercel fetches Play Link using Vercel IP)
         if (action === 'play') {
             const sid = req.query.id;
-            const detailPath = req.query.detail || '';
+            let detailPath = req.query.detail || '';
+
+            // Fetch detailPath dynamically if not provided
+            if (!detailPath) {
+                try {
+                    const detailRes = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/detail?subjectId=${sid}`, {
+                        headers: { 'User-Agent': ua, 'Referer': 'https://filmboom.top/' }
+                    });
+                    detailPath = detailRes.data?.data?.subject?.detailPath || '';
+                } catch (e) {}
+            }
 
             const playApiUrl = `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`;
             const playHeaders = {
                 'User-Agent': ua,
-                'Referer': `https://filmboom.top/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`
+                'Referer': `https://filmboom.top/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
+                'Origin': 'https://filmboom.top'
             };
 
             const playRes = await axios.get(playApiUrl, { headers: playHeaders });
