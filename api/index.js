@@ -279,8 +279,7 @@ module.exports = async (req, res) => {
 
                 const attemptLog = {
                     target_endpoint: epUrl,
-                    referer_sent: currentHeaders.Referer,
-                    client_ip_sent: clientIp
+                    referer_sent: currentHeaders.Referer
                 };
 
                 try {
