@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Modern Real Browser User-Agents Pool
+// User-Agent Pool
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -11,8 +11,12 @@ function getRandomUserAgent() {
     return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
+const MAIN_URL = "https://moviebox.ph";
+const MAIN_API_URL = "https://h5-api.aoneroom.com";
+const SECOND_API_URL = "https://filmboom.top";
+
 module.exports = async (req, res) => {
-    // 1. Enable Full CORS & Expose Media Range Headers
+    // 1. Full CORS & Expose Headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', '*');
@@ -31,8 +35,7 @@ module.exports = async (req, res) => {
 
     try {
         // =============================================================
-        // INSTANT STREAM PLAYER PROXY (?api=stream_play)
-        // Instant 10ms execution with target or dynamic stream resolution!
+        // 1. STREAM PIPE / INSTANT PROXY PLAYER (?api=stream_play)
         // =============================================================
         if (api === 'stream_play' || api === 'stream_pipe') {
             const sid = req.query.id;
@@ -41,79 +44,27 @@ module.exports = async (req, res) => {
             const detailPath = req.query.detail || '';
             let targetUrl = req.query.target || req.query.url;
 
-            // Step 1: Decode target URL if passed directly
-            if (targetUrl) {
-                let decodedTarget = targetUrl;
-                if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
-                if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
-                
-                // Fast 302 Redirect to live video stream (10ms Execution)
-                if (req.query.mode !== 'pipe') {
-                    return res.redirect(302, decodedTarget);
-                }
-
-                // Pipe Mode for Range Requests
-                const videoHeaders = {
+            if (!targetUrl && sid) {
+                const playHeaders = {
                     'User-Agent': ua,
-                    'Referer': 'https://filmboom.top/',
-                    'Origin': 'https://filmboom.top'
-                };
-                if (req.headers.range) {
-                    videoHeaders['Range'] = req.headers.range;
-                }
-
-                const response = await axios({
-                    method: 'get',
-                    url: decodedTarget,
-                    headers: videoHeaders,
-                    responseType: 'stream',
-                    validateStatus: () => true,
-                    timeout: 15000
-                });
-
-                res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
-                res.setHeader('Content-Disposition', 'inline');
-                res.setHeader('Accept-Ranges', 'bytes');
-                if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
-                if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
-
-                res.status(response.status);
-                return response.data.pipe(res);
-            }
-
-            // Step 2: Resolve fresh signed MP4 URL using Vercel if target is not passed
-            if (sid) {
-                const clientIp = `${Math.floor(Math.random() * 150) + 20}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
-                const basePlayHeaders = {
-                    'User-Agent': ua,
+                    'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
+                    'Origin': SECOND_API_URL,
                     'Accept': 'application/json, text/plain, */*',
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Sec-Fetch-Dest': 'empty',
                     'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'X-Forwarded-For': clientIp,
-                    'X-Real-IP': clientIp,
-                    'Cookie': 'lang=en'
+                    'Sec-Fetch-Site': 'same-origin'
                 };
 
                 const endpoints = [
-                    `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
-                    `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
-                    `https://moviebox.ph/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
-                    `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
+                    `${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                    `${MAIN_API_URL}/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                    `${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
                 ];
 
                 for (const epUrl of endpoints) {
                     try {
-                        const hostName = new URL(epUrl).hostname;
-                        const mirrorOrigin = `https://${hostName}`;
-                        const currentHeaders = {
-                            ...basePlayHeaders,
-                            'Referer': `${mirrorOrigin}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
-                            'Origin': mirrorOrigin
-                        };
-
-                        const pRes = await axios.get(epUrl, { headers: currentHeaders, timeout: 10000 });
+                        const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
                         const st = pRes.data?.data?.streams || [];
                         if (st.length > 0) {
                             targetUrl = st[0].url;
@@ -128,21 +79,54 @@ module.exports = async (req, res) => {
                 return res.status(404).json({ status: 'error', message: 'Unable to resolve live stream URL' });
             }
 
-            // Fast 302 Redirect to live video stream
-            return res.redirect(302, targetUrl);
+            let decodedTarget = targetUrl;
+            if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
+            if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
+
+            if (req.query.mode !== 'pipe') {
+                return res.redirect(302, decodedTarget);
+            }
+
+            const videoHeaders = {
+                'User-Agent': ua,
+                'Referer': `${SECOND_API_URL}/`,
+                'Origin': SECOND_API_URL
+            };
+            if (req.headers.range) videoHeaders['Range'] = req.headers.range;
+
+            const response = await axios({
+                method: 'get',
+                url: decodedTarget,
+                headers: videoHeaders,
+                responseType: 'stream',
+                validateStatus: () => true,
+                timeout: 15000
+            });
+
+            res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
+            res.setHeader('Content-Disposition', 'inline');
+            res.setHeader('Accept-Ranges', 'bytes');
+            if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
+            if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
+
+            res.status(response.status);
+            return response.data.pipe(res);
         }
 
-        // Return JSON for all other API endpoints
+        // Return JSON for REST API calls
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
 
         // =============================================================
-        // ENDPOINT 1: TRENDING MOVIES / CATALOG (?api=trending)
+        // 2. MAIN PAGE / RANKING LISTS / CATEGORIES (?api=trending)
         // =============================================================
-        if (api === 'trending') {
-            const listUrl = 'https://h5-api.aoneroom.com/wefeed-h5api-bff/ranking-list/content?id=872031290915189720&page=1&perPage=20';
-            const response = await axios.get(listUrl, { headers: { 'User-Agent': ua } });
+        if (api === 'trending' || api === 'mainpage') {
+            const categoryId = req.query.category || "872031290915189720";
+            const page = req.query.page || "1";
+
+            const url = `${MAIN_API_URL}/wefeed-h5api-bff/ranking-list/content?id=${categoryId}&page=${page}&perPage=12`;
+            const response = await axios.get(url, { headers: { 'User-Agent': ua } });
             const items = response.data?.data?.subjectList || [];
-            
+
             const results = items.map(i => ({
                 id: i.subjectId,
                 title: i.title,
@@ -153,26 +137,61 @@ module.exports = async (req, res) => {
                 details_api: `${baseUrl}/?api=all&id=${i.subjectId}`
             }));
 
-            return res.json({ status: 'success', total: results.length, data: results });
+            return res.json({ status: 'success', categoryId: categoryId, page: page, total: results.length, data: results });
         }
 
         // =============================================================
-        // ENDPOINT 2: SEARCH MOVIES (?api=search&q=Avatar)
+        // 3. CHANNEL FILTER API (?api=filter&channel=1&sort=ForYou)
+        // =============================================================
+        if (api === 'filter') {
+            const channelId = req.query.channel || "1"; // 1 = Movie, 2 = TV, 1006 = Anime
+            const sort = req.query.sort || "ForYou"; // ForYou, Hottest, Latest, Rating
+            const page = req.query.page || 1;
+
+            const filterUrl = `${MAIN_API_URL}/wefeed-h5api-bff/subject/filter`;
+            const response = await axios.post(filterUrl, {
+                channelId: channelId,
+                page: Number(page),
+                perPage: '28',
+                sort: sort
+            }, {
+                headers: {
+                    'User-Agent': ua,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const items = response.data?.data?.items || [];
+            const results = items.map(i => ({
+                id: i.subjectId,
+                title: i.title,
+                type: i.subjectType === 2 ? 'TV Series' : 'Movie',
+                cover: i.cover?.url || '',
+                detailPath: i.detailPath || '',
+                imdbRating: i.imdbRatingValue || null,
+                details_api: `${baseUrl}/?api=all&id=${i.subjectId}`
+            }));
+
+            return res.json({ status: 'success', channelId: channelId, sort: sort, page: page, total: results.length, data: results });
+        }
+
+        // =============================================================
+        // 4. SEARCH API (?api=search&q=Avatar)
         // =============================================================
         if (api === 'search') {
             const query = req.query.q || req.query.query || '';
             if (!query) return res.status(400).json({ status: 'error', message: "Missing 'q' query parameter" });
 
-            const searchUrl = 'https://filmboom.top/wefeed-h5-bff/web/subject/search';
+            const searchUrl = `${SECOND_API_URL}/wefeed-h5-bff/web/subject/search`;
             const response = await axios.post(searchUrl, {
                 keyword: query,
-                page: '1',
-                perPage: '20',
-                subjectType: '0'
+                page: "1",
+                perPage: "0",
+                subjectType: "0"
             }, {
                 headers: {
                     'User-Agent': ua,
-                    'Referer': 'https://filmboom.top/',
+                    'Referer': `${SECOND_API_URL}/`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -192,7 +211,35 @@ module.exports = async (req, res) => {
         }
 
         // =============================================================
-        // ENDPOINT 3: ALL-IN-ONE DETAILS & STREAMS (?api=all&id=...)
+        // 5. CAPTIONS / SUBTITLES API (?api=subtitles&id=...&stream_id=...&format=MP4)
+        // =============================================================
+        if (api === 'subtitles' || api === 'captions') {
+            const sid = req.query.id;
+            const streamId = req.query.stream_id || '';
+            const format = req.query.format || 'MP4';
+            const detailPath = req.query.detail || '';
+
+            if (!sid) return res.status(400).json({ status: 'error', message: "Missing 'id' parameter" });
+
+            const captionUrl = `${SECOND_API_URL}/wefeed-h5-bff/web/subject/caption?format=${format}&id=${streamId}&subjectId=${sid}`;
+            const referer = `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`;
+
+            const response = await axios.get(captionUrl, {
+                headers: { 'User-Agent': ua, 'Referer': referer }
+            });
+
+            const captions = response.data?.data?.captions || [];
+            const results = captions.map(c => ({
+                language: c.lanName || c.lan || 'Unknown',
+                lang_code: c.lan || '',
+                url: c.url
+            }));
+
+            return res.json({ status: 'success', subjectId: sid, total: results.length, subtitles: results });
+        }
+
+        // =============================================================
+        // 6. ALL-IN-ONE METADATA, STREAMS & SUBTITLES (?api=all&id=...)
         // =============================================================
         if (api === 'all' || api === 'streams' || api === 'details' || api === 'play') {
             const sid = req.query.id;
@@ -203,32 +250,36 @@ module.exports = async (req, res) => {
             let reqEp = req.query.ep;
 
             let subject = null;
+            let stars = [];
             let resourceData = null;
-            const diagnostics = {
-                metadata_step: {},
-                play_api_attempts: []
-            };
+            let recommendations = [];
 
-            // 1. Fetch Details Metadata
+            // 1. Fetch Subject Detail & Stars
             try {
-                const detailRes = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/detail?subjectId=${sid}`, {
-                    headers: { 'User-Agent': ua, 'Referer': 'https://filmboom.top/' },
+                const detailRes = await axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/detail?subjectId=${sid}`, {
+                    headers: { 'User-Agent': ua, 'Referer': `${SECOND_API_URL}/` },
                     timeout: 8000
                 });
                 subject = detailRes.data?.data?.subject || null;
+                stars = detailRes.data?.data?.stars || [];
                 resourceData = detailRes.data?.data?.resource || null;
                 if (!detailPath && subject?.detailPath) {
                     detailPath = subject.detailPath;
                 }
-                diagnostics.metadata_step = {
-                    status: detailRes.status,
-                    detailPath_resolved: detailPath,
-                    subjectType: subject?.subjectType,
-                    title: subject?.title
-                };
-            } catch (e) {
-                diagnostics.metadata_step = { error: e.message, code: e.code };
-            }
+            } catch (e) {}
+
+            // 2. Fetch Recommendations
+            try {
+                const recRes = await axios.get(`${MAIN_URL}/wefeed-h5-bff/web/subject/detail-rec?subjectId=${sid}&page=1&perPage=12`, {
+                    headers: { 'User-Agent': ua }
+                });
+                recommendations = (recRes.data?.data?.items || []).map(r => ({
+                    id: r.subjectId,
+                    title: r.title,
+                    cover: r.cover?.url || '',
+                    detailPath: r.detailPath || ''
+                }));
+            } catch (e) {}
 
             // Auto Detect Season / Episode
             let se = reqSe;
@@ -248,70 +299,56 @@ module.exports = async (req, res) => {
                 }
             }
 
-            const basePlayHeaders = {
+            const playHeaders = {
                 'User-Agent': ua,
+                'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
+                'Origin': SECOND_API_URL,
                 'Accept': 'application/json, text/plain, */*',
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin',
-                'Cookie': 'lang=en'
+                'Sec-Fetch-Site': 'same-origin'
             };
 
-            // 2. Fetch Streams via Multi-Endpoint Retries
+            // 3. Fetch Video Streams
             let rawStreams = [];
             const endpoints = [
-                `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
-                `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
-                `https://moviebox.ph/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
-                `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`,
-                `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
+                `${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                `${MAIN_API_URL}/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                `${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
             ];
 
             for (const epUrl of endpoints) {
-                const hostName = new URL(epUrl).hostname;
-                const mirrorOrigin = `https://${hostName}`;
-                const currentHeaders = {
-                    ...basePlayHeaders,
-                    'Referer': `${mirrorOrigin}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
-                    'Origin': mirrorOrigin
-                };
-
-                const attemptLog = {
-                    target_endpoint: epUrl,
-                    referer_sent: currentHeaders.Referer
-                };
-
                 try {
-                    const pRes = await axios.get(epUrl, { headers: currentHeaders, timeout: 10000 });
+                    const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
                     const st = pRes.data?.data?.streams || [];
-                    
-                    attemptLog.http_status = pRes.status;
-                    attemptLog.api_code = pRes.data?.code;
-                    attemptLog.api_message = pRes.data?.message;
-                    attemptLog.streams_found = st.length;
-                    
                     if (st.length > 0) {
-                        attemptLog.sample_stream_url = st[0].url ? st[0].url.substring(0, 80) + '...' : null;
                         rawStreams = st;
-                        diagnostics.play_api_attempts.push(attemptLog);
                         break;
-                    } else {
-                        attemptLog.api_data_response = pRes.data;
                     }
-                } catch (e) {
-                    attemptLog.error = e.message;
-                    attemptLog.error_code = e.code;
-                    if (e.response) {
-                        attemptLog.http_status = e.response.status;
-                        attemptLog.response_body = e.response.data;
-                    }
-                }
-                diagnostics.play_api_attempts.push(attemptLog);
+                } catch (e) {}
             }
 
-            // Map streams with direct URL and Instant 10ms Vercel Proxy Player URL
+            // 4. Fetch Subtitles/Captions if stream available
+            let subtitles = [];
+            if (rawStreams.length > 0) {
+                try {
+                    const firstStream = rawStreams[0];
+                    const capRes = await axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/caption?format=${firstStream.format || 'MP4'}&id=${firstStream.id}&subjectId=${sid}`, {
+                        headers: { 'User-Agent': ua, 'Referer': playHeaders.Referer },
+                        timeout: 5000
+                    });
+                    subtitles = (capRes.data?.data?.captions || []).map(c => ({
+                        language: c.lanName || c.lan || 'Unknown',
+                        lang_code: c.lan || '',
+                        url: c.url
+                    }));
+                } catch (e) {}
+            }
+
+            // Map streams with direct URL and Instant Vercel Proxy Player URL
             const formattedStreams = rawStreams.map(s => ({
+                id: s.id,
                 resolution: s.resolutions ? `${s.resolutions}p` : 'HD',
                 format: s.format || 'MP4',
                 size_bytes: s.size || null,
@@ -319,13 +356,20 @@ module.exports = async (req, res) => {
                 proxy_url: `${baseUrl}/?api=stream_play&target=${encodeURIComponent(s.url)}&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
             }));
 
-            // Seasons Info for TV Series
+            // Format Stars / Cast
+            const castList = stars.map(s => ({
+                name: s.name,
+                character: s.character,
+                avatarUrl: s.avatarUrl
+            }));
+
+            // Format Seasons Info for TV Series
             let seasonsInfo = [];
             if (resourceData?.seasons) {
                 seasonsInfo = resourceData.seasons.map(season => ({
                     season: season.se,
                     maxEpisodes: season.maxEp || 0,
-                    episodes: season.resolutions ? season.resolutions.map(r => r.epNum) : []
+                    episodes: season.allEp ? season.allEp.split(',').map(Number) : (season.maxEp ? Array.from({length: season.maxEp}, (_, i) => i + 1) : [])
                 }));
             }
 
@@ -337,27 +381,31 @@ module.exports = async (req, res) => {
                 releaseDate: subject?.releaseDate || '',
                 imdbRating: subject?.imdbRatingValue || null,
                 country: subject?.countryName || '',
-                genres: subject?.genre || '',
+                genres: subject?.genre ? subject.genre.split(',').map(g => g.trim()) : [],
                 poster: subject?.cover?.url || '',
                 description: subject?.description || '',
                 trailer_url: subject?.trailer?.videoAddress?.url || null,
+                cast: castList,
                 current_season: se,
                 current_episode: ep,
                 seasons: seasonsInfo,
-                streams: formattedStreams,
-                high_level_diagnostics: diagnostics
+                recommendations: recommendations,
+                subtitles: subtitles,
+                streams: formattedStreams
             });
         }
 
         // DEFAULT DOCUMENTATION
         return res.json({
             status: 'online',
-            service: 'MovieBox Ultra Fast REST API Hub',
-            version: '3.5.0',
+            service: 'MovieBox Full Kotlin Provider REST API Engine',
+            version: '4.0.0',
             endpoints: {
                 trending: `${baseUrl}/?api=trending`,
+                filter: `${baseUrl}/?api=filter&channel=1&sort=ForYou`,
                 search: `${baseUrl}/?api=search&q=Avatar`,
-                details_and_streams: `${baseUrl}/?api=all&id=7901815314139468256`,
+                details_streams_subtitles: `${baseUrl}/?api=all&id=7901815314139468256`,
+                subtitles_only: `${baseUrl}/?api=subtitles&id=7901815314139468256&stream_id=8032691801322668456`,
                 instant_proxy_player: `${baseUrl}/?api=stream_play&id=7901815314139468256`
             }
         });
