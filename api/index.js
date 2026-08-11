@@ -45,8 +45,8 @@ module.exports = async (req, res) => {
             const detailPath = req.query.detail || '';
             let targetUrl = req.query.target || req.query.url;
 
-            // Step 1: If targetUrl is missing, resolve fresh live stream URL dynamically
-            if (!targetUrl && sid) {
+            // Step 1: Always resolve fresh live stream URL dynamically if sid is present
+            if (sid) {
                 const clientIp = getRandomSEAsianIP();
                 const playHeaders = {
                     'User-Agent': USER_AGENT,
