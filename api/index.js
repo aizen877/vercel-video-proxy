@@ -35,8 +35,237 @@ module.exports = async (req, res) => {
 
     try {
         // =============================================================
+        // 0. PREMIUM WEB VIDEO PLAYER INTERFACE (?api=player&id=...)
+        // =============================================================
+        if (api === 'player' || api === 'watch') {
+            const sid = req.query.id || "7901815314139468256";
+            
+            // Fetch metadata and streams from internal handler
+            let subject = null;
+            let rawStreams = [];
+            let subtitles = [];
+            let detailPath = req.query.detail || '';
+
+            try {
+                const clientIp = getRandomSEAsianIP();
+                const playHeaders = {
+                    'User-Agent': USER_AGENT,
+                    'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
+                    'Origin': SECOND_API_URL,
+                    'Accept': 'application/json',
+                    'X-Forwarded-For': clientIp,
+                    'X-Real-IP': clientIp,
+                    'Cookie': 'lang=en'
+                };
+
+                const [detailRes, playRes] = await Promise.all([
+                    axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/detail?subjectId=${sid}`, { headers: { 'User-Agent': USER_AGENT } }),
+                    axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`, { headers: playHeaders })
+                ]);
+
+                subject = detailRes.data?.data?.subject || {};
+                rawStreams = playRes.data?.data?.streams || [];
+
+                if (rawStreams.length > 0) {
+                    const first = rawStreams[0];
+                    const capRes = await axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/caption?format=${first.format || 'MP4'}&id=${first.id}&subjectId=${sid}`, { headers: playHeaders });
+                    subtitles = capRes.data?.data?.captions || [];
+                }
+            } catch (e) {}
+
+            const title = subject?.title || 'MovieBox Cinema';
+            const poster = subject?.cover?.url || '';
+            const description = subject?.description || '';
+            const rating = subject?.imdbRatingValue || '8.0';
+
+            const defaultStreamUrl = rawStreams.length > 0 ? rawStreams[0].url : '';
+
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            return res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>${title} - MovieBox Ultra Player</title>
+                <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+                <style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body {
+                        background-color: #060913;
+                        color: #f1f5f9;
+                        font-family: 'Outfit', sans-serif;
+                        min-height: 100vh;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        padding: 20px;
+                    }
+                    .container {
+                        width: 100%;
+                        max-width: 1100px;
+                        background: rgba(15, 23, 42, 0.85);
+                        backdrop-filter: blur(16px);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        border-radius: 20px;
+                        overflow: hidden;
+                        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.2);
+                    }
+                    .player-wrapper {
+                        position: relative;
+                        width: 100%;
+                        aspect-ratio: 16 / 9;
+                        background: #000;
+                    }
+                    video {
+                        width: 100%;
+                        height: 100%;
+                        outline: none;
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                    }
+                    .controls-bar {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 12px;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 16px 24px;
+                        background: #0f172a;
+                    }
+                    .badge {
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        color: #fff;
+                        padding: 6px 14px;
+                        border-radius: 30px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        letter-spacing: 0.5px;
+                    }
+                    .qualities-btn {
+                        display: flex;
+                        gap: 8px;
+                    }
+                    .q-btn {
+                        background: #1e293b;
+                        color: #94a3b8;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        padding: 8px 16px;
+                        border-radius: 8px;
+                        font-size: 13px;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    }
+                    .q-btn:hover, .q-btn.active {
+                        background: #10b981;
+                        color: #fff;
+                        border-color: #10b981;
+                        box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+                    }
+                    .movie-info {
+                        display: flex;
+                        gap: 24px;
+                        padding: 24px;
+                    }
+                    .poster {
+                        width: 140px;
+                        height: 210px;
+                        border-radius: 12px;
+                        object-fit: cover;
+                        border: 1px solid rgba(255,255,255,0.15);
+                        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+                    }
+                    .details {
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 10px;
+                    }
+                    .title {
+                        font-size: 28px;
+                        font-weight: 700;
+                        color: #fff;
+                    }
+                    .meta {
+                        display: flex;
+                        gap: 16px;
+                        font-size: 14px;
+                        color: #10b981;
+                        font-weight: 600;
+                    }
+                    .desc {
+                        font-size: 14px;
+                        color: #94a3b8;
+                        line-height: 1.6;
+                    }
+                    .api-link {
+                        display: inline-block;
+                        margin-top: 10px;
+                        color: #38bdf8;
+                        text-decoration: none;
+                        font-size: 13px;
+                        transition: color 0.2s;
+                    }
+                    .api-link:hover { color: #7dd3fc; text-decoration: underline; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="player-wrapper">
+                        <video id="mainPlayer" controls autoplay crossorigin="anonymous" poster="${poster}">
+                            ${defaultStreamUrl ? `<source src="${defaultStreamUrl}" type="video/mp4">` : ''}
+                            ${subtitles.map(s => `<track kind="subtitles" src="${s.url}" srclang="${s.lan || 'en'}" label="${s.lanName || s.lan}" ${s.lan === 'en' ? 'default' : ''}>`).join('')}
+                            Your browser does not support HTML5 video playback.
+                        </video>
+                    </div>
+
+                    <div class="controls-bar">
+                        <span class="badge">⚡ MovieBox Ultra Stream</span>
+                        <div class="qualities-btn">
+                            ${rawStreams.map((s, idx) => `
+                                <button class="q-btn ${idx === 0 ? 'active' : ''}" onclick="switchStream('${s.url}', this)">
+                                    ${s.resolutions ? s.resolutions + 'p' : 'HD'}
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="movie-info">
+                        ${poster ? `<img src="${poster}" class="poster" alt="${title}">` : ''}
+                        <div class="details">
+                            <h1 class="title">${title}</h1>
+                            <div class="meta">
+                                <span>⭐ IMDb ${rating}</span>
+                                <span>🍿 MovieBox HD</span>
+                                <span>💬 Subtitles Available (${subtitles.length})</span>
+                            </div>
+                            <p class="desc">${description || 'No description available.'}</p>
+                            <a href="/?api=all&id=${sid}" class="api-link">View Full REST API JSON Response →</a>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    function switchStream(url, btn) {
+                        const player = document.getElementById('mainPlayer');
+                        const currentTime = player.currentTime;
+                        const isPaused = player.paused;
+
+                        document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+
+                        player.src = url;
+                        player.currentTime = currentTime;
+                        if (!isPaused) player.play();
+                    }
+                </script>
+            </body>
+            </html>
+            `);
+        }
+
+        // =============================================================
         // 1. PURE REAL VIDEO STREAM REVERSE PROXY (?api=proxy & ?api=stream_play)
-        // Streams MP4 video bytes directly through Vercel (NO REDIRECTS!)
+        // Streams MP4 video bytes directly through Vercel
         // =============================================================
         if (api === 'proxy' || api === 'stream_play' || api === 'stream_pipe') {
             const sid = req.query.id;
@@ -89,7 +318,7 @@ module.exports = async (req, res) => {
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
 
-            // Fast 302 Redirect to live fresh video stream (0.01s Execution Speed)
+            // Fast 302 Redirect to live fresh video stream
             return res.redirect(302, decodedTarget);
         }
 
@@ -114,6 +343,7 @@ module.exports = async (req, res) => {
                 cover: i.cover?.url || '',
                 detailPath: i.detailPath || '',
                 imdbRating: i.imdbRatingValue || null,
+                player_ui: `${baseUrl}/?api=player&id=${i.subjectId}`,
                 details_api: `${baseUrl}/?api=all&id=${i.subjectId}`
             }));
 
@@ -149,6 +379,7 @@ module.exports = async (req, res) => {
                 cover: i.cover?.url || '',
                 detailPath: i.detailPath || '',
                 imdbRating: i.imdbRatingValue || null,
+                player_ui: `${baseUrl}/?api=player&id=${i.subjectId}`,
                 details_api: `${baseUrl}/?api=all&id=${i.subjectId}`
             }));
 
@@ -184,6 +415,7 @@ module.exports = async (req, res) => {
                 cover: i.cover?.url || '',
                 detailPath: i.detailPath || '',
                 imdbRating: i.imdbRatingValue || null,
+                player_ui: `${baseUrl}/?api=player&id=${i.subjectId}`,
                 details_api: `${baseUrl}/?api=all&id=${i.subjectId}`
             }));
 
@@ -331,7 +563,7 @@ module.exports = async (req, res) => {
                 } catch (e) {}
             }
 
-            // Map streams with direct URL and Pure Stream Reverse Proxy URL (NO REDIRECTS!)
+            // Map streams with direct URL and Pure Stream Reverse Proxy URL
             const formattedStreams = rawStreams.map(s => ({
                 id: s.id,
                 resolution: s.resolutions ? `${s.resolutions}p` : 'HD',
@@ -370,6 +602,7 @@ module.exports = async (req, res) => {
                 poster: subject?.cover?.url || '',
                 description: subject?.description || '',
                 trailer_url: subject?.trailer?.videoAddress?.url || null,
+                player_ui: `${baseUrl}/?api=player&id=${sid}`,
                 cast: castList,
                 current_season: se,
                 current_episode: ep,
@@ -383,14 +616,14 @@ module.exports = async (req, res) => {
         // DEFAULT DOCUMENTATION
         return res.json({
             status: 'online',
-            service: 'MovieBox Pure Real Video Stream Reverse Proxy Engine',
-            version: '5.0.0',
+            service: 'MovieBox Full Suite & Modern Web Video Player Hub',
+            version: '6.0.0',
             endpoints: {
+                web_player_ui: `${baseUrl}/?api=player&id=7901815314139468256`,
+                all_in_one_json: `${baseUrl}/?api=all&id=7901815314139468256`,
                 trending: `${baseUrl}/?api=trending`,
                 filter: `${baseUrl}/?api=filter&channel=1&sort=ForYou`,
-                search: `${baseUrl}/?api=search&q=Avatar`,
-                details_streams_subtitles: `${baseUrl}/?api=all&id=7901815314139468256`,
-                real_video_stream_proxy: `${baseUrl}/?api=proxy&id=7901815314139468256`
+                search: `${baseUrl}/?api=search&q=Avatar`
             }
         });
 
