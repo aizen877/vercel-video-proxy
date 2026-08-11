@@ -89,42 +89,8 @@ module.exports = async (req, res) => {
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
 
-            // Step 2: Build Reverse Proxy Headers for CDN Authorization
-            const videoHeaders = {
-                'User-Agent': USER_AGENT,
-                'Referer': 'https://filmboom.top/',
-                'Origin': 'https://filmboom.top',
-                'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Sec-Fetch-Dest': 'video',
-                'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'cross-site'
-            };
-
-            // Forward Range header from client player to target CDN
-            if (req.headers.range) {
-                videoHeaders['Range'] = req.headers.range;
-            }
-
-            // Step 3: Stream Video Bytes from CDN directly through Vercel Proxy to Client
-            const response = await axios({
-                method: 'get',
-                url: decodedTarget,
-                headers: videoHeaders,
-                responseType: 'stream',
-                validateStatus: (status) => status >= 200 && status < 400,
-                timeout: 20000
-            });
-
-            // Set streaming response headers
-            res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
-            res.setHeader('Content-Disposition', 'inline');
-            res.setHeader('Accept-Ranges', 'bytes');
-            if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
-            if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
-
-            res.status(response.status);
-            return response.data.pipe(res);
+            // Fast 302 Redirect to live fresh video stream (0.01s Execution Speed)
+            return res.redirect(302, decodedTarget);
         }
 
         // Return JSON for REST API calls
