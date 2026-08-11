@@ -194,6 +194,8 @@ module.exports = async (req, res) => {
 
             // 2. Fetch Streams via Multi-Endpoint Retries
             let rawStreams = [];
+            let debugLogs = [];
+
             const endpoints = [
                 `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
                 `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`,
@@ -205,11 +207,14 @@ module.exports = async (req, res) => {
                 try {
                     const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
                     const st = pRes.data?.data?.streams || [];
+                    debugLogs.push({ url: epUrl, status: pRes.status, code: pRes.data?.code, streamsFound: st.length, data: pRes.data });
                     if (st.length > 0) {
                         rawStreams = st;
                         break;
                     }
-                } catch (e) {}
+                } catch (e) {
+                    debugLogs.push({ url: epUrl, error: e.message, code: e.code });
+                }
             }
 
             // Map streams with direct URL and Vercel Proxy URL
@@ -246,7 +251,8 @@ module.exports = async (req, res) => {
                 current_season: se,
                 current_episode: ep,
                 seasons: seasonsInfo,
-                streams: formattedStreams
+                streams: formattedStreams,
+                debug_logs: formattedStreams.length === 0 ? debugLogs : undefined
             });
         }
 
