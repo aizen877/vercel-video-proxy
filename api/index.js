@@ -17,11 +17,11 @@ const MAIN_API_URL = "https://h5-api.aoneroom.com";
 const SECOND_API_URL = "https://filmboom.top";
 
 module.exports = async (req, res) => {
-    // 1. Full CORS & Expose Headers
+    // 1. Full CORS & Expose Media Range Headers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', '*');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -35,51 +35,18 @@ module.exports = async (req, res) => {
 
     try {
         // =============================================================
-        // 1. STREAM PIPE / INSTANT PROXY PLAYER (?api=stream_play)
+        // 1. PURE REAL VIDEO STREAM REVERSE PROXY (?api=proxy & ?api=stream_play)
+        // Streams MP4 video bytes directly through Vercel (NO REDIRECTS!)
         // =============================================================
-        if (api === 'stream_play' || api === 'stream_pipe') {
+        if (api === 'proxy' || api === 'stream_play' || api === 'stream_pipe') {
             const sid = req.query.id;
             const se = req.query.se || '0';
             const ep = req.query.ep || '0';
             const detailPath = req.query.detail || '';
             let targetUrl = req.query.target || req.query.url;
 
-            // 1. Render HTML5 Web Player for browser navigation
-            const acceptHeader = req.headers['accept'] || '';
-            if (acceptHeader.includes('text/html') && req.query.mode !== 'direct' && req.query.mode !== 'pipe') {
-                const playSrc = `${baseUrl}/?api=stream_play&mode=direct&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`;
-                res.setHeader('Content-Type', 'text/html; charset=utf-8');
-                return res.send(`
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>MovieBox Web Player</title>
-                    <style>
-                        body { background: #0b0f19; color: #fff; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; }
-                        .player-card { width: 90%; max-width: 900px; background: #1e293b; padding: 15px; border-radius: 12px; box-shadow: 0 0 30px rgba(56,189,248,0.3); text-align: center; }
-                        video { width: 100%; border-radius: 8px; outline: none; background: #000; }
-                        .info { margin-top: 12px; color: #38bdf8; font-size: 14px; }
-                        .back { display: inline-block; margin-top: 15px; color: #94a3b8; text-decoration: none; font-size: 14px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="player-card">
-                        <video controls autoplay name="media">
-                            <source src="${playSrc}" type="video/mp4">
-                            Your browser does not support HTML5 video playback.
-                        </video>
-                        <div class="info">⚡ Playing via MovieBox Live Stream Proxy</div>
-                        <a href="/?api=all&id=${sid || ''}" class="back">← Back to API Metadata</a>
-                    </div>
-                </body>
-                </html>
-                `);
-            }
-
-            // 2. Resolve fresh live stream URL dynamically if sid is present
-            if (sid) {
+            // Step 1: If targetUrl is missing, resolve fresh live stream URL dynamically
+            if (!targetUrl && sid) {
                 const clientIp = getRandomSEAsianIP();
                 const playHeaders = {
                     'User-Agent': USER_AGENT,
@@ -106,7 +73,7 @@ module.exports = async (req, res) => {
                         const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
                         const st = pRes.data?.data?.streams || [];
                         if (st.length > 0) {
-                            targetUrl = st[0].url; // Fresh signed live stream URL!
+                            targetUrl = st[0].url;
                             break;
                         }
                     } catch (e) {}
@@ -122,12 +89,7 @@ module.exports = async (req, res) => {
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
 
-            // 3. Fast 302 Redirect to live fresh video stream (Default mode for players / apps / CloudStream)
-            if (req.query.mode !== 'pipe') {
-                return res.redirect(302, decodedTarget);
-            }
-
-            // 4. Pipe Mode for Range requests
+            // Step 2: Build Reverse Proxy Headers for CDN Authorization
             const videoHeaders = {
                 'User-Agent': USER_AGENT,
                 'Referer': 'https://filmboom.top/',
@@ -139,19 +101,22 @@ module.exports = async (req, res) => {
                 'Sec-Fetch-Site': 'cross-site'
             };
 
+            // Forward Range header from client player to target CDN
             if (req.headers.range) {
                 videoHeaders['Range'] = req.headers.range;
             }
 
+            // Step 3: Stream Video Bytes from CDN directly through Vercel Proxy to Client
             const response = await axios({
                 method: 'get',
                 url: decodedTarget,
                 headers: videoHeaders,
                 responseType: 'stream',
-                validateStatus: () => true,
-                timeout: 15000
+                validateStatus: (status) => status >= 200 && status < 400,
+                timeout: 20000
             });
 
+            // Set streaming response headers
             res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
             res.setHeader('Content-Disposition', 'inline');
             res.setHeader('Accept-Ranges', 'bytes');
@@ -400,14 +365,14 @@ module.exports = async (req, res) => {
                 } catch (e) {}
             }
 
-            // Map streams with direct URL and Instant Proxy Player URL
+            // Map streams with direct URL and Pure Stream Reverse Proxy URL (NO REDIRECTS!)
             const formattedStreams = rawStreams.map(s => ({
                 id: s.id,
                 resolution: s.resolutions ? `${s.resolutions}p` : 'HD',
                 format: s.format || 'MP4',
                 size_bytes: s.size || null,
                 direct_url: s.url,
-                proxy_url: `${baseUrl}/?api=stream_play&target=${encodeURIComponent(s.url)}&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
+                proxy_url: `${baseUrl}/?api=proxy&url=${encodeURIComponent(s.url)}&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`
             }));
 
             // Format Stars / Cast
@@ -452,15 +417,14 @@ module.exports = async (req, res) => {
         // DEFAULT DOCUMENTATION
         return res.json({
             status: 'online',
-            service: 'MovieBox Full Kotlin Provider REST API Engine',
-            version: '4.0.0',
+            service: 'MovieBox Pure Real Video Stream Reverse Proxy Engine',
+            version: '5.0.0',
             endpoints: {
                 trending: `${baseUrl}/?api=trending`,
                 filter: `${baseUrl}/?api=filter&channel=1&sort=ForYou`,
                 search: `${baseUrl}/?api=search&q=Avatar`,
                 details_streams_subtitles: `${baseUrl}/?api=all&id=7901815314139468256`,
-                subtitles_only: `${baseUrl}/?api=subtitles&id=7901815314139468256&stream_id=8032691801322668456`,
-                instant_proxy_player: `${baseUrl}/?api=stream_play&id=7901815314139468256`
+                real_video_stream_proxy: `${baseUrl}/?api=proxy&id=7901815314139468256`
             }
         });
 
