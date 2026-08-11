@@ -181,6 +181,8 @@ module.exports = async (req, res) => {
                 }
             }
 
+            const clientIp = `${Math.floor(Math.random() * 150) + 20}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
+
             const playHeaders = {
                 'User-Agent': ua,
                 'Referer': `https://filmboom.top/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
@@ -189,23 +191,35 @@ module.exports = async (req, res) => {
                 'Accept-Language': 'en-US,en;q=0.9',
                 'Sec-Fetch-Dest': 'empty',
                 'Sec-Fetch-Mode': 'cors',
-                'Sec-Fetch-Site': 'same-origin'
+                'Sec-Fetch-Site': 'same-origin',
+                'X-Forwarded-For': clientIp,
+                'X-Real-IP': clientIp,
+                'Cookie': 'lang=en'
             };
 
-            // 2. Fetch Streams via Multi-Endpoint Retries
+            // 2. Fetch Streams via Multi-Endpoint & Mirror Retries
             let rawStreams = [];
             let debugLogs = [];
 
             const endpoints = [
                 `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                `https://moviebox.ph/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
                 `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`,
-                `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=1&ep=1`,
-                `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`
+                `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
             ];
 
             for (const epUrl of endpoints) {
                 try {
-                    const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
+                    const hostName = new URL(epUrl).hostname;
+                    const mirrorOrigin = `https://${hostName}`;
+                    const currentHeaders = {
+                        ...playHeaders,
+                        'Referer': `${mirrorOrigin}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
+                        'Origin': mirrorOrigin
+                    };
+
+                    const pRes = await axios.get(epUrl, { headers: currentHeaders, timeout: 8000 });
                     const st = pRes.data?.data?.streams || [];
                     debugLogs.push({ url: epUrl, status: pRes.status, code: pRes.data?.code, streamsFound: st.length, data: pRes.data });
                     if (st.length > 0) {
