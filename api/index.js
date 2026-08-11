@@ -47,7 +47,7 @@ module.exports = async (req, res) => {
             // 1. Render Premium HTML5 Web Player Page when opened in Browser (Accept: text/html)
             const acceptHeader = req.headers['accept'] || '';
             if (acceptHeader.includes('text/html') && req.query.mode !== 'direct' && req.query.mode !== 'pipe') {
-                const streamPipeUrl = `${baseUrl}/?api=stream_play&mode=pipe&target=${encodeURIComponent(targetUrl || '')}&id=${sid || ''}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`;
+                const directMediaUrl = `${baseUrl}/?api=stream_play&mode=direct&id=${sid || ''}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`;
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 return res.send(`
                 <!DOCTYPE html>
@@ -55,16 +55,16 @@ module.exports = async (req, res) => {
                 <head>
                     <meta charset="UTF-8">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>MovieBox Ultra Web Player</title>
+                    <title>MovieBox Cinema Player</title>
                     <style>
                         * { box-sizing: border-box; }
                         body { background: #070913; color: #f8fafc; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: system-ui, -apple-system, sans-serif; }
-                        .player-card { width: 95%; max-width: 960px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 16px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 40px rgba(56, 189, 248, 0.15); backdrop-filter: blur(10px); }
+                        .player-card { width: 95%; max-width: 960px; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 16px; padding: 20px; box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 40px rgba(56, 189, 248, 0.2); }
                         .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
                         .title { font-size: 20px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
                         .badge { background: #0284c7; color: #fff; font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; text-transform: uppercase; }
                         .video-container { width: 100%; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-                        video { width: 100%; max-height: 70vh; outline: none; }
+                        video { width: 100%; max-height: 70vh; outline: none; display: block; }
                         .footer { margin-top: 15px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #94a3b8; }
                         .btn { display: inline-flex; align-items: center; gap: 6px; background: #1e293b; color: #38bdf8; text-decoration: none; padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 600; transition: all 0.2s; }
                         .btn:hover { background: #0284c7; color: #fff; }
@@ -73,18 +73,18 @@ module.exports = async (req, res) => {
                 <body>
                     <div class="player-card">
                         <div class="header">
-                            <div class="title">🎬 MovieBox Ultra Web Player <span class="badge">Live Stream</span></div>
-                            <a href="/?api=all&id=${sid || ''}" class="btn">← Back to Metadata API</a>
+                            <div class="title">🎬 MovieBox Cinema Player <span class="badge">Live Stream</span></div>
+                            <a href="/?api=all&id=${sid || ''}" class="btn">← Back to API Metadata</a>
                         </div>
                         <div class="video-container">
-                            <video controls autoplay name="media">
-                                <source src="${streamPipeUrl}" type="video/mp4">
+                            <video controls autoplay playsinline name="media">
+                                <source src="${directMediaUrl}" type="video/mp4">
                                 Your browser does not support HTML5 video playback.
                             </video>
                         </div>
                         <div class="footer">
-                            <div>⚡ Powered by High-Speed Vercel Media Engine</div>
-                            <div>CORS & Range Streaming Enabled</div>
+                            <div>⚡ Powered by Ultra Fast Vercel Engine</div>
+                            <div>Direct HTML5 Media Stream</div>
                         </div>
                     </div>
                 </body>
