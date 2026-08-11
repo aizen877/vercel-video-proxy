@@ -184,10 +184,12 @@ module.exports = async (req, res) => {
             let se = reqSe;
             let ep = reqEp;
 
+            // Auto-detect season and episode if not specified (Fix 0 || 1 JS bug)
             if (se === undefined || ep === undefined) {
                 if (resourceData?.seasons && resourceData.seasons.length > 0) {
-                    se = String(resourceData.seasons[0].se || 1);
-                    ep = '1';
+                    const s0 = resourceData.seasons[0].se;
+                    se = s0 !== undefined && s0 !== null ? String(s0) : (subject?.subjectType === 2 ? '1' : '0');
+                    ep = (se === '0') ? '0' : '1';
                 } else if (subject?.subjectType === 2) {
                     se = '1';
                     ep = '1';
@@ -229,17 +231,19 @@ module.exports = async (req, res) => {
                 } catch (e) {}
             }
 
-            // Build Episode Selector Buttons if seasons exist
+            // Build Episode Selector Buttons if seasons exist (TV Series only)
             let episodeButtonsHtml = '';
-            if (resourceData?.seasons && resourceData.seasons.length > 0) {
-                episodeButtonsHtml = '<div class="episodes-container"><h3>Episodes</h3><div class="ep-grid">';
+            if (resourceData?.seasons && resourceData.seasons.length > 0 && resourceData.seasons[0].se > 0) {
                 const s0 = resourceData.seasons[0];
                 const maxEp = s0.maxEp || 1;
-                for (let i = 1; i <= maxEp; i++) {
-                    const activeClass = (String(i) === String(ep)) ? 'active-ep' : '';
-                    episodeButtonsHtml += `<a href="/?action=play&id=${sid}&detail=${encodeURIComponent(detailPath)}&se=${s0.se}&ep=${i}" class="ep-btn ${activeClass}">Episode ${i}</a>`;
+                if (maxEp > 0) {
+                    episodeButtonsHtml = '<div class="episodes-container"><h3>Episodes</h3><div class="ep-grid">';
+                    for (let i = 1; i <= maxEp; i++) {
+                        const activeClass = (String(i) === String(ep)) ? 'active-ep' : '';
+                        episodeButtonsHtml += `<a href="/?action=play&id=${sid}&detail=${encodeURIComponent(detailPath)}&se=${s0.se}&ep=${i}" class="ep-btn ${activeClass}">Episode ${i}</a>`;
+                    }
+                    episodeButtonsHtml += '</div></div>';
                 }
-                episodeButtonsHtml += '</div></div>';
             }
 
             // Video Player Section HTML
