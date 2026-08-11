@@ -202,32 +202,28 @@ module.exports = async (req, res) => {
             const playHeaders = {
                 'User-Agent': ua,
                 'Referer': `https://filmboom.top/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
-                'Origin': 'https://filmboom.top'
+                'Origin': 'https://filmboom.top',
+                'Accept': 'application/json, text/plain, */*'
             };
 
             let streams = [];
             
-            // Try 1: Specified se & ep
-            try {
-                const playRes = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`, { headers: playHeaders });
-                streams = playRes.data?.data?.streams || [];
-            } catch (e) {}
+            // Try fetching from multiple endpoints & se/ep combinations
+            const endpoints = [
+                `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`,
+                `https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=1&ep=1`,
+                `https://h5-api.aoneroom.com/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`
+            ];
 
-            // Fallback 1: Try se=1, ep=1 if episode 0 failed
-            if (!streams.length && (se === '0' || se === 0)) {
+            for (const apiEndpoint of endpoints) {
                 try {
-                    const playRes2 = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=1&ep=1`, { headers: playHeaders });
-                    streams = playRes2.data?.data?.streams || [];
-                    if (streams.length) { se = '1'; ep = '1'; }
-                } catch (e) {}
-            }
-
-            // Fallback 2: Try se=0, ep=0 if se=1, ep=1 failed
-            if (!streams.length && (se === '1' || se === 1)) {
-                try {
-                    const playRes3 = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`, { headers: playHeaders });
-                    streams = playRes3.data?.data?.streams || [];
-                    if (streams.length) { se = '0'; ep = '0'; }
+                    const playRes = await axios.get(apiEndpoint, { headers: playHeaders, timeout: 8000 });
+                    const foundStreams = playRes.data?.data?.streams || [];
+                    if (foundStreams.length > 0) {
+                        streams = foundStreams;
+                        break;
+                    }
                 } catch (e) {}
             }
 
