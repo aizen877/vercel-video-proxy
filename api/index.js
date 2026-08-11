@@ -32,7 +32,6 @@ module.exports = async (req, res) => {
     const baseUrl = `${protocol}://${host}`;
 
     const api = req.query.api || req.query.action || 'docs';
-    const ua = USER_AGENT;
 
     try {
         // =============================================================
@@ -45,10 +44,45 @@ module.exports = async (req, res) => {
             const detailPath = req.query.detail || '';
             let targetUrl = req.query.target || req.query.url;
 
-            if (!targetUrl && sid) {
+            // 1. Render HTML5 Web Player for browser navigation
+            const acceptHeader = req.headers['accept'] || '';
+            if (acceptHeader.includes('text/html') && req.query.mode !== 'direct' && req.query.mode !== 'pipe') {
+                const playSrc = `${baseUrl}/?api=stream_play&mode=direct&id=${sid}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`;
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                return res.send(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>MovieBox Web Player</title>
+                    <style>
+                        body { background: #0b0f19; color: #fff; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; }
+                        .player-card { width: 90%; max-width: 900px; background: #1e293b; padding: 15px; border-radius: 12px; box-shadow: 0 0 30px rgba(56,189,248,0.3); text-align: center; }
+                        video { width: 100%; border-radius: 8px; outline: none; background: #000; }
+                        .info { margin-top: 12px; color: #38bdf8; font-size: 14px; }
+                        .back { display: inline-block; margin-top: 15px; color: #94a3b8; text-decoration: none; font-size: 14px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="player-card">
+                        <video controls autoplay name="media">
+                            <source src="${playSrc}" type="video/mp4">
+                            Your browser does not support HTML5 video playback.
+                        </video>
+                        <div class="info">⚡ Playing via MovieBox Live Stream Proxy</div>
+                        <a href="/?api=all&id=${sid || ''}" class="back">← Back to API Metadata</a>
+                    </div>
+                </body>
+                </html>
+                `);
+            }
+
+            // 2. Resolve fresh live stream URL dynamically if sid is present
+            if (sid) {
                 const clientIp = getRandomSEAsianIP();
                 const playHeaders = {
-                    'User-Agent': ua,
+                    'User-Agent': USER_AGENT,
                     'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
                     'Origin': SECOND_API_URL,
                     'Accept': 'application/json, text/plain, */*',
@@ -72,7 +106,7 @@ module.exports = async (req, res) => {
                         const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
                         const st = pRes.data?.data?.streams || [];
                         if (st.length > 0) {
-                            targetUrl = st[0].url;
+                            targetUrl = st[0].url; // Fresh signed live stream URL!
                             break;
                         }
                     } catch (e) {}
@@ -87,48 +121,15 @@ module.exports = async (req, res) => {
             let decodedTarget = targetUrl;
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
             if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
-            // 1. Render HTML5 Web Player for browser navigation (Prevents Nginx 429 Direct Address Bar Block)
-            const acceptHeader = req.headers['accept'] || '';
-            if (acceptHeader.includes('text/html') && req.query.mode !== 'direct') {
-                res.setHeader('Content-Type', 'text/html; charset=utf-8');
-                const encodedStream = encodeURIComponent(decodedTarget);
-                return res.send(`
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>MovieBox Web Player</title>
-                    <style>
-                        body { background: #0b0f19; color: #fff; margin:0; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; }
-                        .player-card { width: 90%; max-width: 900px; background: #1e293b; padding: 15px; border-radius: 12px; box-shadow: 0 0 30px rgba(56,189,248,0.3); text-align: center; }
-                        video { width: 100%; border-radius: 8px; outline: none; background: #000; }
-                        .info { margin-top: 12px; color: #38bdf8; font-size: 14px; }
-                        .back { display: inline-block; margin-top: 15px; color: #94a3b8; text-decoration: none; font-size: 14px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="player-card">
-                        <video controls autoplay name="media">
-                            <source src="/?api=stream_play&mode=pipe&target=${encodedStream}" type="video/mp4">
-                            Your browser does not support HTML5 video playback.
-                        </video>
-                        <div class="info">⚡ Playing via High-Speed Vercel Media Pipe</div>
-                        <a href="/?api=all&id=${sid || ''}" class="back">← Back to API Metadata</a>
-                    </div>
-                </body>
-                </html>
-                `);
-            }
 
-            // 2. Direct 302 Redirect for non-HTML players or mode=direct
-            if (req.query.mode === 'direct') {
+            // 3. Fast 302 Redirect to live fresh video stream (Default mode for players / apps / CloudStream)
+            if (req.query.mode !== 'pipe') {
                 return res.redirect(302, decodedTarget);
             }
 
-            // 3. Pipe Mode for Range requests (Fixes 426 Upgrade Required via OSS CDN auth)
+            // 4. Pipe Mode for Range requests
             const videoHeaders = {
-                'User-Agent': ua,
+                'User-Agent': USER_AGENT,
                 'Referer': 'https://filmboom.top/',
                 'Origin': 'https://filmboom.top',
                 'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
@@ -154,13 +155,8 @@ module.exports = async (req, res) => {
             res.setHeader('Content-Type', response.headers['content-type'] || 'video/mp4');
             res.setHeader('Content-Disposition', 'inline');
             res.setHeader('Accept-Ranges', 'bytes');
-
-            if (response.headers['content-range']) {
-                res.setHeader('Content-Range', response.headers['content-range']);
-            }
-            if (response.headers['content-length']) {
-                res.setHeader('Content-Length', response.headers['content-length']);
-            }
+            if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
+            if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
 
             res.status(response.status);
             return response.data.pipe(res);
@@ -177,7 +173,7 @@ module.exports = async (req, res) => {
             const page = req.query.page || "1";
 
             const url = `${MAIN_API_URL}/wefeed-h5api-bff/ranking-list/content?id=${categoryId}&page=${page}&perPage=12`;
-            const response = await axios.get(url, { headers: { 'User-Agent': ua } });
+            const response = await axios.get(url, { headers: { 'User-Agent': USER_AGENT } });
             const items = response.data?.data?.subjectList || [];
 
             const results = items.map(i => ({
@@ -209,7 +205,7 @@ module.exports = async (req, res) => {
                 sort: sort
             }, {
                 headers: {
-                    'User-Agent': ua,
+                    'User-Agent': USER_AGENT,
                     'Content-Type': 'application/json'
                 }
             });
@@ -243,7 +239,7 @@ module.exports = async (req, res) => {
                 subjectType: "0"
             }, {
                 headers: {
-                    'User-Agent': ua,
+                    'User-Agent': USER_AGENT,
                     'Referer': `${SECOND_API_URL}/`,
                     'Content-Type': 'application/json'
                 }
@@ -278,7 +274,7 @@ module.exports = async (req, res) => {
             const referer = `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`;
 
             const response = await axios.get(captionUrl, {
-                headers: { 'User-Agent': ua, 'Referer': referer }
+                headers: { 'User-Agent': USER_AGENT, 'Referer': referer }
             });
 
             const captions = response.data?.data?.captions || [];
@@ -310,7 +306,7 @@ module.exports = async (req, res) => {
             // 1. Fetch Subject Detail & Stars
             try {
                 const detailRes = await axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/detail?subjectId=${sid}`, {
-                    headers: { 'User-Agent': ua, 'Referer': `${SECOND_API_URL}/` },
+                    headers: { 'User-Agent': USER_AGENT, 'Referer': `${SECOND_API_URL}/` },
                     timeout: 8000
                 });
                 subject = detailRes.data?.data?.subject || null;
@@ -324,7 +320,7 @@ module.exports = async (req, res) => {
             // 2. Fetch Recommendations
             try {
                 const recRes = await axios.get(`${MAIN_URL}/wefeed-h5-bff/web/subject/detail-rec?subjectId=${sid}&page=1&perPage=12`, {
-                    headers: { 'User-Agent': ua }
+                    headers: { 'User-Agent': USER_AGENT }
                 });
                 recommendations = (recRes.data?.data?.items || []).map(r => ({
                     id: r.subjectId,
@@ -355,7 +351,7 @@ module.exports = async (req, res) => {
             const clientIp = getRandomSEAsianIP();
 
             const playHeaders = {
-                'User-Agent': ua,
+                'User-Agent': USER_AGENT,
                 'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
                 'Origin': SECOND_API_URL,
                 'Accept': 'application/json, text/plain, */*',
@@ -393,7 +389,7 @@ module.exports = async (req, res) => {
                 try {
                     const firstStream = rawStreams[0];
                     const capRes = await axios.get(`${SECOND_API_URL}/wefeed-h5-bff/web/subject/caption?format=${firstStream.format || 'MP4'}&id=${firstStream.id}&subjectId=${sid}`, {
-                        headers: { 'User-Agent': ua, 'Referer': playHeaders.Referer },
+                        headers: { 'User-Agent': USER_AGENT, 'Referer': playHeaders.Referer },
                         timeout: 5000
                     });
                     subtitles = (capRes.data?.data?.captions || []).map(c => ({
