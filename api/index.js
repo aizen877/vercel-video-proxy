@@ -44,10 +44,53 @@ module.exports = async (req, res) => {
             const detailPath = req.query.detail || '';
             let targetUrl = req.query.target || req.query.url;
 
-            // 1. Render Premium HTML5 Web Player Page when opened in Browser (Accept: text/html)
+            // 1. Resolve fresh live stream URL dynamically if sid is present
+            if (sid) {
+                const clientIp = getRandomSEAsianIP();
+                const playHeaders = {
+                    'User-Agent': USER_AGENT,
+                    'Referer': `${SECOND_API_URL}/spa/videoPlayPage/movies/${detailPath}?id=${sid}&type=/movie/detail&lang=en`,
+                    'Origin': SECOND_API_URL,
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin',
+                    'X-Forwarded-For': clientIp,
+                    'X-Real-IP': clientIp,
+                    'Cookie': 'lang=en'
+                };
+
+                const endpoints = [
+                    `${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                    `${MAIN_API_URL}/wefeed-h5api-bff/web/subject/play?subjectId=${sid}&se=${se}&ep=${ep}`,
+                    `${SECOND_API_URL}/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`
+                ];
+
+                for (const epUrl of endpoints) {
+                    try {
+                        const pRes = await axios.get(epUrl, { headers: playHeaders, timeout: 8000 });
+                        const st = pRes.data?.data?.streams || [];
+                        if (st.length > 0) {
+                            targetUrl = st[0].url;
+                            break;
+                        }
+                    } catch (e) {}
+                }
+            }
+
+            if (!targetUrl) {
+                res.setHeader('Content-Type', 'application/json');
+                return res.status(404).json({ status: 'error', message: 'Unable to resolve live stream URL' });
+            }
+
+            let decodedTarget = targetUrl;
+            if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
+            if (decodedTarget.includes('%')) decodedTarget = decodeURIComponent(decodedTarget);
+
+            // 2. Render Premium HTML5 Web Cinema Player when opened in Browser (Accept: text/html)
             const acceptHeader = req.headers['accept'] || '';
-            if (acceptHeader.includes('text/html') && req.query.mode !== 'direct' && req.query.mode !== 'pipe') {
-                const directMediaUrl = `${baseUrl}/?api=stream_play&mode=direct&id=${sid || ''}&se=${se}&ep=${ep}&detail=${encodeURIComponent(detailPath)}`;
+            if (acceptHeader.includes('text/html') && req.query.mode !== 'direct') {
                 res.setHeader('Content-Type', 'text/html; charset=utf-8');
                 return res.send(`
                 <!DOCTYPE html>
@@ -77,14 +120,14 @@ module.exports = async (req, res) => {
                             <a href="/?api=all&id=${sid || ''}" class="btn">← Back to API Metadata</a>
                         </div>
                         <div class="video-container">
-                            <video controls autoplay playsinline name="media">
-                                <source src="${directMediaUrl}" type="video/mp4">
+                            <video controls autoplay playsinline name="media" referrerpolicy="no-referrer">
+                                <source src="${decodedTarget}" type="video/mp4">
                                 Your browser does not support HTML5 video playback.
                             </video>
                         </div>
                         <div class="footer">
                             <div>⚡ Powered by Ultra Fast Vercel Engine</div>
-                            <div>Direct HTML5 Media Stream</div>
+                            <div>Direct HTML5 Stream</div>
                         </div>
                     </div>
                 </body>
