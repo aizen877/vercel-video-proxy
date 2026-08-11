@@ -1,0 +1,12 @@
+{
+  "name": "vercel-video-proxy",
+  "version": "1.0.0",
+  "description": "High-Speed Ultra Fast Video Streaming Proxy for Vercel",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8"
+  }
+}
