@@ -211,7 +211,7 @@ module.exports = async (req, res) => {
                 streams = playRes.data?.data?.streams || [];
             } catch (e) {}
 
-            # Fallback 1: Try se=1, ep=1 if episode 0 failed
+            // Fallback 1: Try se=1, ep=1 if episode 0 failed
             if (!streams.length && (se === '0' || se === 0)) {
                 try {
                     const playRes2 = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=1&ep=1`, { headers: playHeaders });
@@ -220,7 +220,7 @@ module.exports = async (req, res) => {
                 } catch (e) {}
             }
 
-            # Fallback 2: Try se=0, ep=0 if se=1, ep=1 failed
+            // Fallback 2: Try se=0, ep=0 if se=1, ep=1 failed
             if (!streams.length && (se === '1' || se === 1)) {
                 try {
                     const playRes3 = await axios.get(`https://filmboom.top/wefeed-h5-bff/web/subject/play?subjectId=${sid}&se=0&ep=0`, { headers: playHeaders });
